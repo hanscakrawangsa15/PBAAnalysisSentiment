@@ -6,3 +6,4 @@ Sastrawi
 nlp_id
 wordfreq
 scikit-learn
+matplotlib
