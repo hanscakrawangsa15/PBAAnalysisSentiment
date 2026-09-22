@@ -1,0 +1,7 @@
+# Satu URL video TikTok per baris.
+# Baris yang diawali '#' diabaikan.
+https://www.tiktok.com/@metro_tv/video/7678251730466819348
+https://www.tiktok.com/@metro_tv/video/7681251089672539412
+https://www.tiktok.com/@kompastv.indonesia/video/7683773213410692359
+https://www.tiktok.com/@bbcnewsindonesia/video/7668971169520848135
+https://www.tiktok.com/@detikcom/video/7654867839052008712

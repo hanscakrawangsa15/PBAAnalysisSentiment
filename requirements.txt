@@ -1,0 +1,8 @@
+apify-client
+python-dotenv
+pandas
+nltk
+Sastrawi
+nlp_id
+wordfreq
+scikit-learn
