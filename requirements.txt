@@ -7,3 +7,4 @@ nlp_id
 wordfreq
 scikit-learn
 matplotlib
+Flask
