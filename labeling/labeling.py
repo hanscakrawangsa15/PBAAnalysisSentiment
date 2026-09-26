@@ -4,12 +4,12 @@ labeling.py
 Web app buat labeling manual komentar (positif / negatif / netral).
 
 - Data mentah (RAW_FILE) TIDAK PERNAH ditimpa/diubah.
-- Hasil labeling ditulis ke file BARU (OUTPUT_FILE) di folder labeling/,
-  hasil copy dari RAW_FILE + 5 kolom nama: shafwa, hans, gerald, clay, baqhiz.
+- Tiap orang punya file csv SENDIRI-SENDIRI di folder labeling/
+  (labels_shafwa.csv, labels_hans.csv, dst) -- jadi kalau dikerjain rame-rame
+  lewat git, gak akan ada conflict, soalnya masing-masing cuma nulis ke
+  filenya sendiri.
 - Sebelum mulai, app nanya dulu "ini siapa?" - pilih salah satu dari 5 nama.
-  Jawaban itu nentuin label ditulis di kolom mana.
-- Tiap orang punya progress sendiri-sendiri (kolom sendiri), jadi 5 orang bisa
-  jalan bareng tanpa rebutan.
+  Jawaban itu nentuin file mana yang dipakai.
 
 Cara kerja:
 - Pilih nama dulu di halaman awal
@@ -18,14 +18,14 @@ Cara kerja:
 - Arrow DOWN  (↓) = netral
 - Arrow RIGHT (→) = positif
 - Arrow UP    (↑) / tombol Previous = balik ke komentar sebelumnya (relabel)
-- Auto-save PER KLIK, langsung update + rewrite labeling/labels.csv
+- Auto-save PER KLIK, langsung update + rewrite file csv orang itu
 
 Usage:
     python labeling.py
     Buka browser: http://localhost:5000
 """
 
-from flask import Flask, render_template_string, request, jsonify, redirect
+from flask import Flask, render_template_string, request, jsonify
 import pandas as pd
 from pathlib import Path
 
@@ -35,8 +35,8 @@ app = Flask(__name__)
 # PATH CONFIG - CUSTOMIZE DI SINI
 # ============================================================================
 
-RAW_FILE = Path("data/comments.csv")          # data mentah, TIDAK disentuh
-OUTPUT_FILE = Path("labeling/labels.csv")     # hasil labeling, file baru
+RAW_FILE = Path("data/comments.csv")  # data mentah, TIDAK disentuh
+OUTPUT_DIR = Path("labeling")         # tiap orang punya file sendiri di sini
 
 LABELERS = ["Shafwa", "Hans", "Gerald", "Clay", "Baqhiz"]
 LABEL_CHOICES = ["negatif", "netral", "positif"]
@@ -46,48 +46,49 @@ LABEL_CHOICES = ["negatif", "netral", "positif"]
 # ============================================================================
 
 state = {
-    'df': None,
+    'dfs': {},       # nama -> dataframe punya orang itu
     'sessions': {},  # nama -> {'queue': [list of df index], 'pos': int}
 }
 
 # ============================================================================
-# LOAD / SAVE
+# LOAD / SAVE (per orang, file terpisah)
 # ============================================================================
 
-def load_data():
-    """Load OUTPUT_FILE kalau sudah ada (biar resume), kalau belum, bikin dari RAW_FILE."""
-    if OUTPUT_FILE.exists():
-        df = pd.read_csv(OUTPUT_FILE, dtype=str)
+def output_path(name):
+    return OUTPUT_DIR / f"labels_{name.lower()}.csv"
+
+def load_person_df(name):
+    """Load file csv punya 1 orang. Kalau belum ada, bikin dari RAW_FILE."""
+    if name in state['dfs']:
+        return state['dfs'][name]
+
+    path = output_path(name)
+    if path.exists():
+        df = pd.read_csv(path, dtype=str)
     else:
         if not RAW_FILE.exists():
-            print(f"❌ {RAW_FILE} not found!")
-            return False
+            raise FileNotFoundError(f"{RAW_FILE} not found!")
         df = pd.read_csv(RAW_FILE, dtype=str)
-        for name in LABELERS:
-            df[name.lower()] = ''
-        OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
+        df['label'] = ''
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        df.to_csv(path, index=False, encoding='utf-8')
 
     df['comment_text'] = df['comment_text'].fillna('')
-    for name in LABELERS:
-        col = name.lower()
-        if col not in df.columns:
-            df[col] = ''
-        df[col] = df[col].fillna('')
+    if 'label' not in df.columns:
+        df['label'] = ''
+    df['label'] = df['label'].fillna('')
 
-    state['df'] = df
-    print(f"✅ Loaded {len(df)} komentar. Output: {OUTPUT_FILE}")
-    return True
+    state['dfs'][name] = df
+    return df
 
-def rewrite_output_csv():
-    state['df'].to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
+def save_person_df(name):
+    state['dfs'][name].to_csv(output_path(name), index=False, encoding='utf-8')
 
 def get_session(name):
-    """Ambil (atau bikin) antrian & posisi buat 1 orang, berdasarkan kolomnya sendiri."""
+    """Ambil (atau bikin) antrian & posisi buat 1 orang."""
     if name not in state['sessions']:
-        df = state['df']
-        col = name.lower()
-        pending = df[df[col] == ''].index.tolist()
+        df = load_person_df(name)
+        pending = df[df['label'] == ''].index.tolist()
         state['sessions'][name] = {'queue': pending, 'pos': 0}
     return state['sessions'][name]
 
@@ -103,13 +104,12 @@ def index():
         return render_template_string(SELECT_HTML, labelers=LABELERS)
 
     try:
-        df = state['df']
-        col = name.lower()
+        df = load_person_df(name)
         sess = get_session(name)
         queue, pos = sess['queue'], sess['pos']
 
         total = len(queue)
-        reviewed = sum(1 for idx in queue if df.at[idx, col] != '')
+        reviewed = sum(1 for idx in queue if df.at[idx, 'label'] != '')
 
         if not queue or pos >= total:
             return render_template_string(DONE_HTML, name=name, total=total)
@@ -145,8 +145,7 @@ def label_comment():
         if label not in LABEL_CHOICES:
             return jsonify({'error': f'Invalid label: {label}'}), 400
 
-        df = state['df']
-        col = name.lower()
+        df = load_person_df(name)
         sess = get_session(name)
         queue, pos = sess['queue'], sess['pos']
 
@@ -154,8 +153,8 @@ def label_comment():
             return jsonify({'error': 'Semua komentar sudah dilabel'}), 400
 
         df_idx = queue[pos]
-        df.at[df_idx, col] = label
-        rewrite_output_csv()
+        df.at[df_idx, 'label'] = label
+        save_person_df(name)
 
         sess['pos'] += 1
 
@@ -383,11 +382,11 @@ DONE_HTML = """
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("LABELING - LABELING MANUAL KOMENTAR (multi-orang)")
+    print("LABELING - LABELING MANUAL KOMENTAR (1 file csv per orang)")
     print("="*70)
 
-    if not load_data():
-        print("❌ Gagal load data")
+    if not RAW_FILE.exists():
+        print(f"❌ {RAW_FILE} not found!")
         exit(1)
 
     print(f"\n🌐 Buka browser: http://localhost:5000")
