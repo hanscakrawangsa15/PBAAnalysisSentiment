@@ -35,8 +35,10 @@ app = Flask(__name__)
 # PATH CONFIG - CUSTOMIZE DI SINI
 # ============================================================================
 
-RAW_FILE = Path("data/comments.csv")  # data mentah, TIDAK disentuh
-OUTPUT_DIR = Path("labeling")         # tiap orang punya file sendiri di sini
+BASE_DIR = Path(__file__).resolve().parent
+
+RAW_FILE = BASE_DIR.parent / "data" / "comments.csv"  # data mentah, TIDAK disentuh
+OUTPUT_DIR = BASE_DIR                                 # tiap orang punya file sendiri di sini
 
 LABELERS = ["Shafwa", "Hans", "Gerald", "Clay", "Baqhiz"]
 LABEL_CHOICES = ["negatif", "netral", "positif"]
