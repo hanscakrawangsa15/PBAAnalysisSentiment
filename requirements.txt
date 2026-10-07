@@ -7,4 +7,5 @@ nlp_id
 wordfreq
 scikit-learn
 matplotlib
+emoji
 Flask

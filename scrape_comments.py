@@ -31,7 +31,7 @@ def load_post_urls(path):
 
 
 def scrape_post(client, post_url, limit):
-    run_input = {"postURLs": [post_url], "commentsPerPost": limit}
+    run_input = {"postURLs": [post_url], "commentsPerPost": limit, "maxRepliesPerComment": 0}
     run = client.actor(ACTOR_ID).call(run_input=run_input)
     items = client.dataset(run.default_dataset_id).list_items().items
 
