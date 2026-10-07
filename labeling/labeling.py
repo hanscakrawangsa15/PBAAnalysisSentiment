@@ -3,7 +3,7 @@ labeling.py
 ============
 Web app buat labeling manual komentar (positif / negatif / netral).
 
-- Data mentah (RAW_FILE) TIDAK PERNAH ditimpa/diubah.
+- Data mentah (RAW_FILES) TIDAK PERNAH ditimpa/diubah.
 - Tiap orang punya file csv SENDIRI-SENDIRI di folder labeling/
   (labels_shafwa.csv, labels_hans.csv, dst) -- jadi kalau dikerjain rame-rame
   lewat git, gak akan ada conflict, soalnya masing-masing cuma nulis ke
@@ -37,7 +37,11 @@ app = Flask(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 
-RAW_FILE = BASE_DIR.parent / "data" / "comments.csv"  # data mentah, TIDAK disentuh
+# Daftar semua batch data mentah, akan digabung otomatis
+RAW_FILES = [
+    BASE_DIR.parent / "data" / "comments.csv",
+    BASE_DIR.parent / "data" / "comments_batch2.csv"
+]
 OUTPUT_DIR = BASE_DIR                                 # tiap orang punya file sendiri di sini
 
 LABELERS = ["Shafwa", "Hans", "Gerald", "Clay", "Baqhiz"]
@@ -60,17 +64,35 @@ def output_path(name):
     return OUTPUT_DIR / f"labels_{name.lower()}.csv"
 
 def load_person_df(name):
-    """Load file csv punya 1 orang. Kalau belum ada, bikin dari RAW_FILE."""
+    """Load file csv punya 1 orang. Kalau ada batch baru, otomatis ditambahkan di bawahnya."""
     if name in state['dfs']:
         return state['dfs'][name]
 
     path = output_path(name)
+    
+    # Gabungkan semua data mentah
+    raw_dfs = []
+    for rf in RAW_FILES:
+        if rf.exists():
+            raw_dfs.append(pd.read_csv(rf, dtype=str))
+            
+    if not raw_dfs:
+        raise FileNotFoundError("Tidak ada file data mentah yang ditemukan di folder data!")
+        
+    master_df = pd.concat(raw_dfs, ignore_index=True)
+
+    # Cek file output user
     if path.exists():
         df = pd.read_csv(path, dtype=str)
+        # Jika master_df lebih panjang, berarti ada batch baru. Append sisanya.
+        if len(master_df) > len(df):
+            new_data = master_df.iloc[len(df):].copy()
+            new_data['label'] = ''
+            df = pd.concat([df, new_data], ignore_index=True)
+            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            df.to_csv(path, index=False, encoding='utf-8')
     else:
-        if not RAW_FILE.exists():
-            raise FileNotFoundError(f"{RAW_FILE} not found!")
-        df = pd.read_csv(RAW_FILE, dtype=str)
+        df = master_df.copy()
         df['label'] = ''
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         df.to_csv(path, index=False, encoding='utf-8')
@@ -386,10 +408,6 @@ if __name__ == '__main__':
     print("\n" + "="*70)
     print("LABELING - LABELING MANUAL KOMENTAR (1 file csv per orang)")
     print("="*70)
-
-    if not RAW_FILE.exists():
-        print(f"❌ {RAW_FILE} not found!")
-        exit(1)
 
     print(f"\n🌐 Buka browser: http://localhost:5000")
     print(f"⌨️  ← Negatif | ↓ Netral | → Positif | ↑ Previous\n")
