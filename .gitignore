@@ -10,3 +10,15 @@ WEEK 3-4 IH PBA BoW_TFIDF.pptx.pdf
 .qodo/
 **/model_indobertweet/
 openapi.json
+# >>> PBAAnalysisSentiment (otomatis) >>>
+# data berisi komentar & username orang lain, jangan di-push
+labeling/
+data/
+# berkas besar hasil proses
+model_indobertweet/
+*.npy
+.venv/
+venv/
+__pycache__/
+.ipynb_checkpoints/
+# <<< PBAAnalysisSentiment <<<
